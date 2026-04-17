@@ -383,6 +383,18 @@
     const glyphPool = ["#", "+", "0", "1", "/", "*", "?", "<", ">", "=", "%", "@", ";", ":"];
     const scramblePool = "progressinwork0123456789#%+/*?<>=@";
     const headlineText = "progress in work";
+    const scrambleDuration = 32;
+    const ambientShuffleTickDelay = 280;
+    const ambientShuffleChance = 0.03;
+    const ambientShuffleMaxCharacters = 5;
+    const headlineCharacters = headlineText.split("");
+    const ambientShuffleIndices = headlineCharacters.reduce((indices, character, index) => {
+      if (character !== " ") {
+        indices.push(index);
+      }
+
+      return indices;
+    }, []);
     const pointer = {
       x: window.innerWidth / 2,
       y: window.innerHeight / 2,
@@ -409,6 +421,7 @@
     let phaseIndex = 0;
     let flash = 0;
     let scrambleFrame = 0;
+    let ambientShuffleInterval = 0;
 
     function setScene(clientX, clientY) {
       const width = window.innerWidth || 1;
@@ -564,18 +577,56 @@
       }
     }
 
+    function stopAmbientShuffle(resetText = true) {
+      clearInterval(ambientShuffleInterval);
+      ambientShuffleInterval = 0;
+
+      if (resetText) {
+        headline.textContent = headlineText;
+      }
+    }
+
+    function scheduleAmbientShuffle() {
+      if (reduceMotion) {
+        return;
+      }
+
+      clearInterval(ambientShuffleInterval);
+      ambientShuffleInterval = window.setInterval(() => {
+        if (headline.dataset.state === "scrambling") {
+          headline.textContent = headlineText;
+          return;
+        }
+
+        const shuffledIndices = ambientShuffleIndices
+          .filter(() => Math.random() <= ambientShuffleChance)
+          .slice(0, ambientShuffleMaxCharacters);
+
+        headline.textContent = headlineCharacters
+          .map((character, index) => {
+            if (character === " " || !shuffledIndices.includes(index)) {
+              return character;
+            }
+
+            return scramblePool[Math.floor(Math.random() * scramblePool.length)];
+          })
+          .join("");
+      }, ambientShuffleTickDelay);
+    }
+
     function scrambleHeadline() {
       if (reduceMotion) {
         return;
       }
 
+      stopAmbientShuffle(false);
       cancelAnimationFrame(scrambleFrame);
       headline.dataset.state = "scrambling";
       let frame = 0;
 
       function step() {
         frame += 1;
-        const reveal = frame / 18;
+        const reveal = frame / scrambleDuration;
 
         headline.textContent = headlineText
           .split("")
@@ -592,11 +643,12 @@
           })
           .join("");
 
-        if (frame < 18) {
+        if (frame < scrambleDuration) {
           scrambleFrame = requestAnimationFrame(step);
         } else {
           headline.textContent = headlineText;
           headline.dataset.state = "";
+          scheduleAmbientShuffle();
         }
       }
 
@@ -885,6 +937,7 @@
     resizeCanvas();
 
     if (!reduceMotion) {
+      scheduleAmbientShuffle();
       animate();
     }
   </script>
